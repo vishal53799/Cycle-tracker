@@ -327,6 +327,11 @@
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 btn.classList.add('text-pink-500'); btn.classList.remove('text-gray-400');
                 document.getElementById(btn.dataset.target).classList.add('active');
+                
+                // Force chart to safely re-render when its tab becomes visible
+                if (btn.dataset.target === 'tab-insights') {
+                    renderInsights();
+                }
             });
         });
         document.querySelector('[data-target="tab-calendar"]').classList.add('text-pink-500');
@@ -437,6 +442,13 @@
                     ${iconHtml}
                 </div>`;
             }
+
+            // Fill remaining grid space so calendar height never shrinks (locks it to exactly 6 rows/42 cells)
+            let totalCellsRendered = firstDay + daysInMonth;
+            let remainingCells = 42 - totalCellsRendered;
+            for (let i = 0; i < remainingCells; i++) {
+                grid.innerHTML += `<div class="day-cell"></div>`;
+            }
         }
 
         document.getElementById('prevMonth').onclick = () => { currentMonth--; if(currentMonth < 0) { currentMonth = 11; currentYear--; } renderCalendar(); };
@@ -464,6 +476,9 @@
         document.getElementById('quickSaveBtn').onclick = () => {
             if(!selectedDateForLog) return;
             
+            let btn = document.getElementById('quickSaveBtn');
+            btn.disabled = true; // Prevent spam-clicking
+            
             let saveDateString = new Date(selectedDateForLog.getTime() - (selectedDateForLog.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
             cycles.push({
@@ -477,9 +492,10 @@
             // Instantly Backup to Cloud
             saveToCloud();
             
-            document.getElementById('quickSaveBtn').innerText = "Saved to Cloud!";
+            btn.innerText = "Saved to Cloud!";
             setTimeout(() => {
-                document.getElementById('quickSaveBtn').innerText = "Log Period Day";
+                btn.disabled = false;
+                btn.innerText = "Log Period Day";
                 document.getElementById('quickLogWidget').classList.add('hidden');
                 updateUI();
             }, 1000);
@@ -491,17 +507,25 @@
             let compacted = [];
             
             for(let i=0; i<sorted.length; i++) {
-                let current = sorted[i];
+                let current = {...sorted[i]}; 
                 if (compacted.length === 0) { compacted.push(current); continue; }
                 
                 let last = compacted[compacted.length - 1];
-                let lastEnd = addDays(getLocalDate(last.startDate), last.duration);
+                let lastEnd = addDays(getLocalDate(last.startDate), last.duration - 1);
                 let currentStart = getLocalDate(current.startDate);
                 
+                // Only merge if the days actually touch or overlap perfectly
                 if (currentStart <= addDays(lastEnd, 1)) {
-                    let newEnd = new Date(Math.max(addDays(getLocalDate(current.startDate), current.duration - 1).getTime(), addDays(getLocalDate(last.startDate), last.duration - 1).getTime()));
-                    last.duration = diffDays(getLocalDate(last.startDate), newEnd) + 1;
-                    if(current.symptoms) { last.symptoms = last.symptoms ? Array.from(new Set([...last.symptoms.split(', '), ...current.symptoms.split(', ')])).join(', ') : current.symptoms; }
+                    let currentEnd = addDays(currentStart, current.duration - 1);
+                    let maxEnd = new Date(Math.max(currentEnd.getTime(), lastEnd.getTime()));
+                    
+                    last.duration = diffDays(getLocalDate(last.startDate), maxEnd) + 1;
+                    
+                    if (current.symptoms) { 
+                        let s1 = last.symptoms ? last.symptoms.split(',').map(s=>s.trim()).filter(Boolean) : [];
+                        let s2 = current.symptoms ? current.symptoms.split(',').map(s=>s.trim()).filter(Boolean) : [];
+                        last.symptoms = Array.from(new Set([...s1, ...s2])).join(', ');
+                    }
                 } else {
                     compacted.push(current);
                 }
@@ -623,7 +647,11 @@
                 document.getElementById('irregularWarning').classList.add('hidden');
             }
 
-            if (chartInstance) chartInstance.destroy();
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null; // Forces chart object wipe to prevent bugs
+            }
+            
             if (data.length > 0) {
                 chartInstance = new Chart(ctx, {
                     type: 'line',

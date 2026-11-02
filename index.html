@@ -53,7 +53,8 @@
                 <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-400 dark:text-gray-500 mb-2">
                     <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
                 </div>
-                <div id="calendarGrid" class="grid grid-cols-7 gap-1 text-center"></div>
+                <!-- STRICTLY locked to 6 rows and fixed height to prevent shrinking -->
+                <div id="calendarGrid" class="grid grid-cols-7 grid-rows-6 gap-1 text-center min-h-[420px]"></div>
             </div>
 
             <!-- Quick Log Widget -->
@@ -193,9 +194,10 @@
 
         // Cloud save helper function
         async function saveToCloud() {
+            // ALWAYS save to local storage as a bulletproof backup
+            localStorage.setItem('flow_cycles', JSON.stringify(cycles));
+            
             if (!userId || !db) {
-                // Fallback to local device storage if not connected to the cloud workspace
-                localStorage.setItem('flow_cycles', JSON.stringify(cycles));
                 return;
             }
             try {
@@ -208,27 +210,28 @@
 
         // Initialize Secure Cloud Connection
         async function initCloud() {
+            // 1. ALWAYS load local data first so History is never invisible
+            let local = JSON.parse(localStorage.getItem('flow_cycles'));
+            if (!local || local.length === 0) {
+                local = [
+                    { id: 1, startDate: '2026-01-12', duration: 4, symptoms: '' },
+                    { id: 2, startDate: '2026-02-11', duration: 4, symptoms: '' },
+                    { id: 3, startDate: '2026-03-13', duration: 5, symptoms: '' },
+                    { id: 4, startDate: '2026-04-09', duration: 4, symptoms: '' },
+                    { id: 5, startDate: '2026-05-11', duration: 4, symptoms: '' },
+                    { id: 6, startDate: '2026-06-06', duration: 4, symptoms: '' },
+                    { id: 7, startDate: '2026-07-04', duration: 3, symptoms: '' },
+                    { id: 8, startDate: '2026-07-31', duration: 4, symptoms: '' },
+                    { id: 9, startDate: '2026-08-27', duration: 3, symptoms: '' },
+                    { id: 10, startDate: '2026-09-20', duration: 3, symptoms: '' },
+                    { id: 11, startDate: '2026-10-17', duration: 3, symptoms: '' }
+                ];
+                localStorage.setItem('flow_cycles', JSON.stringify(local));
+            }
+            cycles = local;
+            updateUI(); // Show UI instantly using local data
+
             if (typeof __firebase_config === 'undefined') {
-                // Local fallback (when opening raw HTML on desktop instead of live link)
-                let local = JSON.parse(localStorage.getItem('flow_cycles'));
-                if (!local || local.length === 0) {
-                    local = [
-                        { id: 1, startDate: '2026-01-12', duration: 4, symptoms: '' },
-                        { id: 2, startDate: '2026-02-11', duration: 4, symptoms: '' },
-                        { id: 3, startDate: '2026-03-13', duration: 5, symptoms: '' },
-                        { id: 4, startDate: '2026-04-09', duration: 4, symptoms: '' },
-                        { id: 5, startDate: '2026-05-11', duration: 4, symptoms: '' },
-                        { id: 6, startDate: '2026-06-06', duration: 4, symptoms: '' },
-                        { id: 7, startDate: '2026-07-04', duration: 3, symptoms: '' },
-                        { id: 8, startDate: '2026-07-31', duration: 4, symptoms: '' },
-                        { id: 9, startDate: '2026-08-27', duration: 3, symptoms: '' },
-                        { id: 10, startDate: '2026-09-20', duration: 3, symptoms: '' },
-                        { id: 11, startDate: '2026-10-17', duration: 3, symptoms: '' }
-                    ];
-                    localStorage.setItem('flow_cycles', JSON.stringify(local));
-                }
-                cycles = local;
-                updateUI();
                 return;
             }
 
@@ -256,24 +259,13 @@
                         const data = docSnap.data();
                         if (data.cyclesData) {
                             cycles = JSON.parse(data.cyclesData);
+                            // Backup fetched cloud data locally just in case
+                            localStorage.setItem('flow_cycles', JSON.stringify(cycles));
                             updateUI();
                         }
                     } else {
-                        // Push 2026 baseline data on first cloud setup
-                        cycles = [
-                            { id: 1, startDate: '2026-01-12', duration: 4, symptoms: '' },
-                            { id: 2, startDate: '2026-02-11', duration: 4, symptoms: '' },
-                            { id: 3, startDate: '2026-03-13', duration: 5, symptoms: '' },
-                            { id: 4, startDate: '2026-04-09', duration: 4, symptoms: '' },
-                            { id: 5, startDate: '2026-05-11', duration: 4, symptoms: '' },
-                            { id: 6, startDate: '2026-06-06', duration: 4, symptoms: '' },
-                            { id: 7, startDate: '2026-07-04', duration: 3, symptoms: '' },
-                            { id: 8, startDate: '2026-07-31', duration: 4, symptoms: '' },
-                            { id: 9, startDate: '2026-08-27', duration: 3, symptoms: '' },
-                            { id: 10, startDate: '2026-09-20', duration: 3, symptoms: '' },
-                            { id: 11, startDate: '2026-10-17', duration: 3, symptoms: '' }
-                        ];
-                        saveToCloud(); // This securely backs up the defaults
+                        // Push baseline data to cloud if new account
+                        saveToCloud();
                     }
                 }, (error) => {
                     console.error("Cloud listener error:", error);
@@ -282,7 +274,6 @@
                 console.error("Cloud init failed:", e);
             }
         }
-        initCloud();
 
         // 2. Local Time Fix Helpers
         const getLocalDate = (dateStr) => {
@@ -326,11 +317,16 @@
                 document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('text-pink-500'); b.classList.add('text-gray-400'); });
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 btn.classList.add('text-pink-500'); btn.classList.remove('text-gray-400');
-                document.getElementById(btn.dataset.target).classList.add('active');
+                
+                const targetId = btn.dataset.target;
+                document.getElementById(targetId).classList.add('active');
                 
                 // Force chart to safely re-render when its tab becomes visible
-                if (btn.dataset.target === 'tab-insights') {
-                    renderInsights();
+                if (targetId === 'tab-insights') {
+                    // Slight timeout ensures DOM element display is fully computed before chart.js reads it
+                    setTimeout(() => {
+                        renderInsights();
+                    }, 50);
                 }
             });
         });
@@ -383,7 +379,7 @@
 
             const preds = getPredictions();
 
-            for (let i = 0; i < firstDay; i++) { grid.innerHTML += `<div class="day-cell"></div>`; }
+            for (let i = 0; i < firstDay; i++) { grid.innerHTML += `<div class="day-cell pointer-events-none"></div>`; }
 
             for (let day = 1; day <= daysInMonth; day++) {
                 let cellDate = new Date(currentYear, currentMonth, day, 0, 0, 0, 0);
@@ -443,11 +439,11 @@
                 </div>`;
             }
 
-            // Fill remaining grid space so calendar height never shrinks (locks it to exactly 6 rows/42 cells)
+            // GUARANTEED CALENDAR HEIGHT LOCK: Fill remaining grid blocks to always equal 42 cells (6 rows)
             let totalCellsRendered = firstDay + daysInMonth;
             let remainingCells = 42 - totalCellsRendered;
             for (let i = 0; i < remainingCells; i++) {
-                grid.innerHTML += `<div class="day-cell"></div>`;
+                grid.innerHTML += `<div class="day-cell pointer-events-none opacity-0"></div>`;
             }
         }
 
@@ -693,7 +689,18 @@
             }
         }
 
-        function updateUI() { renderCalendar(); renderHistory(); renderInsights(); }
+        function updateUI() { 
+            renderCalendar(); 
+            renderHistory(); 
+            
+            // Only draw chart if Insights tab is currently active
+            if (document.getElementById('tab-insights').classList.contains('active')) {
+                renderInsights(); 
+            }
+        }
+
+        // Initialize the app
+        initCloud();
     </script>
 </body>
 </html>

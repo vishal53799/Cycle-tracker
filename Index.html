@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura - Menstrual Cycle Tracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js for Data Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Custom Tailwind Config for Calming Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fdf2f8', // soft pink
+                            100: '#fce7f3',
+                            200: '#fbcfe8',
+                            300: '#f9a8d4',
+                            400: '#f472b6',
+                            500: '#ec4899', // main pink
+                            600: '#db2777',
+                            700: '#be185d',
+                            800: '#9d174d',
+                            900: '#831843',
+                        },
+                        calm: {
+                            50: '#faf5ff', // soft purple
+                            100: '#f3e8ff',
+                            200: '#e9d5ff',
+                            500: '#a855f7',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Hide default radio and checkboxes for custom styling */
+        .custom-radio input:checked + div {
+            background-color: #ec4899; /* brand-500 */
+            color: white;
+            border-color: #ec4899;
+        }
+        .custom-checkbox input:checked + div {
+            background-color: #f3e8ff; /* calm-100 */
+            color: #a855f7; /* calm-500 */
+            border-color: #a855f7;
+        }
+        
+        /* Flow indicators on calendar */
+        .flow-heavy { background-color: #f472b6; color: white; }
+        .flow-medium { background-color: #f9a8d4; color: white; }
+        .flow-light { background-color: #fbcfe8; color: #831843; }
+        .flow-spotting { background-color: #fce7f3; color: #831843; border: 1px solid #fbcfe8; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f9a8d4; }
+    </style>
+</head>
+<body class="bg-brand-50 text-gray-800 min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-brand-100 sticky top-0 z-10">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <i class="ph-fill ph-drop text-brand-500 text-3xl"></i>
+                    <span class="font-bold text-xl tracking-tight text-gray-900">Aura</span>
+                </div>
+                <div class="flex space-x-4">
+                    <button id="tab-tracker" class="px-4 py-2 rounded-full bg-brand-100 text-brand-700 font-medium transition-colors hover:bg-brand-200" onclick="switchTab('tracker')">
+                        <i class="ph ph-calendar-heart mr-1"></i> Tracker
+                    </button>
+                    <button id="tab-history" class="px-4 py-2 rounded-full text-gray-500 font-medium transition-colors hover:bg-gray-100 hover:text-gray-900" onclick="switchTab('history')">
+                        <i class="ph ph-clock-counter-clockwise mr-1"></i> History
+                    </button>
+                    <button id="tab-insights" class="px-4 py-2 rounded-full text-gray-500 font-medium transition-colors hover:bg-gray-100 hover:text-gray-900" onclick="switchTab('insights')">
+                        <i class="ph ph-chart-line-up mr-1"></i> Insights
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Tracker View -->
+        <div id="view-tracker" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Calendar -->
+            <div class="lg:col-span-7 space-y-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100">
+                    
+                    <!-- Calendar Header -->
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 id="calendar-month-year" class="text-2xl font-semibold text-gray-900">November 2026</h2>
+                        <div class="flex space-x-2">
+                            <button onclick="changeMonth(-1)" class="p-2 rounded-full hover:bg-brand-50 text-brand-500 transition">
+                                <i class="ph-bold ph-caret-left text-xl"></i>
+                            </button>
+                            <button onclick="resetToToday()" class="px-3 py-1 rounded-full text-sm font-medium border border-brand-200 text-brand-600 hover:bg-brand-50 transition">
+                                Today
+                            </button>
+                            <button onclick="changeMonth(1)" class="p-2 rounded-full hover:bg-brand-50 text-brand-500 transition">
+                                <i class="ph-bold ph-caret-right text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Calendar Grid -->
+                    <div>
+                        <div class="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
+                            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                        </div>
+                        <div id="calendar-days" class="grid grid-cols-7 gap-2 text-sm">
+                            <!-- Days will be generated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- Legend -->
+                    <div class="mt-6 flex flex-wrap gap-4 text-xs text-gray-500 justify-center">
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-[#f472b6]"></span> Heavy</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-[#f9a8d4]"></span> Medium</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-[#fbcfe8]"></span> Light</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-[#fce7f3] border border-[#fbcfe8]"></span> Spotting</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-calm-50 border border-dashed border-calm-500"></span> Predicted</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-teal-50 border border-teal-100"></span> Fertile</div>
+                        <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-teal-50 border-2 border-teal-500"></span> Ovulation</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Daily Log Form -->
+            <div class="lg:col-span-5">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 sticky top-24">
+                    <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Daily Log</h3>
+                            <p id="selected-date-display" class="text-sm text-gray-500">Select a date</p>
+                        </div>
+                        <i class="ph-duotone ph-notebook text-3xl text-brand-400"></i>
+                    </div>
+
+                    <form id="daily-log-form" onsubmit="saveDailyLog(event)" class="space-y-6">
+                        <input type="hidden" id="input-date" value="">
+                        
+                        <!-- Flow Intensity -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Flow Intensity</label>
+                            <div class="grid grid-cols-5 gap-2">
+                                <label class="custom-radio cursor-pointer text-center">
+                                    <input type="radio" name="flow" value="none" class="hidden" checked>
+                                    <div class="py-2 px-1 border border-gray-200 rounded-xl text-sm text-gray-500 transition hover:bg-gray-50 flex flex-col items-center gap-1">
+                                        <i class="ph ph-prohibit text-lg"></i>
+                                        <span class="text-[10px] uppercase font-semibold tracking-wider">None</span>
+                                    </div>
+                                </label>
+                                <label class="custom-radio cursor-pointer text-center">
+                                    <input type="radio" name="flow" value="spotting" class="hidden">
+                                    <div class="py-2 px-1 border border-gray-200 rounded-xl text-sm text-gray-500 transition hover:bg-brand-50 flex flex-col items-center gap-1">
+                                        <i class="ph-fill ph-drop text-brand-200 text-lg"></i>
+                                        <span class="text-[10px] uppercase font-semibold tracking-wider">Spot</span>
+                                    </div>
+                                </label>
+                                <label class="custom-radio cursor-pointer text-center">
+                                    <input type="radio" name="flow" value="light" class="hidden">
+                                    <div class="py-2 px-1 border border-gray-200 rounded-xl text-sm text-gray-500 transition hover:bg-brand-50 flex flex-col items-center gap-1">
+                                        <i class="ph-fill ph-drop text-brand-300 text-lg"></i>
+                                        <span class="text-[10px] uppercase font-semibold tracking-wider">Light</span>
+                                    </div>
+                                </label>
+                                <label class="custom-radio cursor-pointer text-center">
+                                    <input type="radio" name="flow" value="medium" class="hidden">
+                                    <div class="py-2 px-1 border border-gray-200 rounded-xl text-sm text-gray-500 transition hover:bg-brand-50 flex flex-col items-center gap-1">
+                                        <div class="flex -space-x-1">
+                                            <i class="ph-fill ph-drop text-brand-400 text-lg"></i>
+                                            <i class="ph-fill ph-drop text-brand-400 text-lg"></i>
+                                        </div>
+                                        <span class="text-[10px] uppercase font-semibold tracking-wider">Med</span>
+                                    </div>
+                                </label>
+                                <label class="custom-radio cursor-pointer text-center">
+                                    <input type="radio" name="flow" value="heavy" class="hidden">
+                                    <div class="py-2 px-1 border border-gray-200 rounded-xl text-sm text-gray-500 transition hover:bg-brand-50 flex flex-col items-center gap-1">
+                                        <div class="flex -space-x-2">
+                                            <i class="ph-fill ph-drop text-brand-500 text-lg"></i>
+                                            <i class="ph-fill ph-drop text-brand-500 text-lg"></i>
+                                            <i class="ph-fill ph-drop text-brand-500 text-lg"></i>
+                                        </div>
+                                        <span class="text-[10px] uppercase font-semibold tracking-wider">Heavy</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Symptoms -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                Symptoms <span class="text-xs font-normal text-gray-400">(Select all that apply)</span>
+                            </label>
+                            <div class="flex flex-wrap gap-2">
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="symptoms" value="cramps" class="hidden">
+                                    <div class="px-3 py-1.5 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1.5">
+                                        <i class="ph ph-lightning"></i> Cramps
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="symptoms" value="bloating" class="hidden">
+                                    <div class="px-3 py-1.5 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1.5">
+                                        <i class="ph ph-wind"></i> Bloating
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="symptoms" value="headache" class="hidden">
+                                    <div class="px-3 py-1.5 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1.5">
+                                        <i class="ph ph-bandaids"></i> Headache
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="symptoms" value="fatigue" class="hidden">
+                                    <div class="px-3 py-1.5 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1.5">
+                                        <i class="ph ph-battery-warning"></i> Fatigue
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="symptoms" value="mood" class="hidden">
+                                    <div class="px-3 py-1.5 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1.5">
+                                        <i class="ph ph-smiley-sad"></i> Mood Swings
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="symptoms" value="acne" class="hidden">
+                                    <div class="px-3 py-1.5 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1.5">
+                                        <i class="ph ph-sparkle"></i> Acne
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div>
+                            <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">Personal Notes</label>
+                            <textarea id="notes" name="notes" rows="3" class="w-full border-gray-200 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-500 outline-none transition resize-none placeholder-gray-400" placeholder="How are you feeling today?"></textarea>
+                        </div>
+
+                        <!-- Submit -->
+                        <button type="submit" class="w-full bg-brand-500 text-white font-medium py-3 rounded-xl hover:bg-brand-600 transition shadow-sm flex justify-center items-center gap-2">
+                            <i class="ph-bold ph-check"></i> Save Log
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Insights View (Hidden by default) -->
+        <div id="view-insights" class="hidden space-y-6">
+            
+            <!-- Key Metrics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-xl">
+                        <i class="ph-fill ph-arrows-clockwise"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Average Cycle Length</p>
+                        <p class="text-2xl font-bold text-gray-900" id="avg-cycle-length">28 <span class="text-base font-normal text-gray-500">Days</span></p>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-xl">
+                        <i class="ph-fill ph-drop"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Average Period Length</p>
+                        <p class="text-2xl font-bold text-gray-900" id="avg-period-length">5 <span class="text-base font-normal text-gray-500">Days</span></p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-calm-100 rounded-full flex items-center justify-center text-calm-500 text-xl">
+                        <i class="ph-fill ph-calendar-plus"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Next Expected Period</p>
+                        <p class="text-xl font-bold text-gray-900" id="next-period-date">Calculating...</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 flex items-center gap-4">
+                    <div class="w-12 h-12 bg-teal-50 rounded-full flex items-center justify-center text-teal-500 text-xl">
+                        <i class="ph-fill ph-flower-lotus"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 font-medium">Ovulation Date</p>
+                        <p class="text-xl font-bold text-gray-900" id="next-ovulation-date">Calculating...</p>
+                        <p class="text-xs text-gray-500 mt-0.5" id="fertile-window-range"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Cycle Length Chart -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Past Cycle Lengths</h3>
+                    <div class="relative h-64 w-full">
+                        <canvas id="cycleChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Symptoms Frequency Chart -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Common Symptoms</h3>
+                    <div class="relative h-64 w-full flex justify-center">
+                        <canvas id="symptomsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100">
+                 <h3 class="text-lg font-medium text-gray-900 mb-4">Flow Intensity Breakdown</h3>
+                 <div class="relative h-64 w-full">
+                     <canvas id="flowChart"></canvas>
+                 </div>
+            </div>
+        </div>
+
+        <!-- History View (Hidden by default) -->
+        <div id="view-history" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Add Past Cycle Form -->
+            <div class="lg:col-span-5 space-y-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 sticky top-24">
+                    <div class="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Log Past Cycle</h3>
+                        <i class="ph-duotone ph-calendar-plus text-3xl text-brand-400"></i>
+                    </div>
+                    
+                    <form id="past-cycle-form" onsubmit="savePastCycle(event)" class="space-y-5">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="past-start" class="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                <input type="date" id="past-start" required class="w-full border-gray-200 border rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-500 outline-none transition text-gray-700">
+                            </div>
+                            <div>
+                                <label for="past-end" class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                                <input type="date" id="past-end" required class="w-full border-gray-200 border rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-500 outline-none transition text-gray-700">
+                            </div>
+                        </div>
+
+                        <!-- General Symptoms for the Cycle -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                Main Symptoms <span class="text-xs font-normal text-gray-400">(During this period)</span>
+                            </label>
+                            <div class="flex flex-wrap gap-2">
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="past-symptoms" value="cramps" class="hidden">
+                                    <div class="px-3 py-1 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1">
+                                        Cramps
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="past-symptoms" value="bloating" class="hidden">
+                                    <div class="px-3 py-1 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1">
+                                        Bloating
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="past-symptoms" value="headache" class="hidden">
+                                    <div class="px-3 py-1 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1">
+                                        Headache
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="past-symptoms" value="fatigue" class="hidden">
+                                    <div class="px-3 py-1 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1">
+                                        Fatigue
+                                    </div>
+                                </label>
+                                <label class="custom-checkbox cursor-pointer">
+                                    <input type="checkbox" name="past-symptoms" value="mood" class="hidden">
+                                    <div class="px-3 py-1 border border-gray-200 rounded-full text-sm text-gray-600 transition hover:bg-gray-50 flex items-center gap-1">
+                                        Mood
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-brand-500 text-white font-medium py-3 rounded-xl hover:bg-brand-600 transition shadow-sm flex justify-center items-center gap-2 mt-4">
+                            <i class="ph-bold ph-plus"></i> Add to History
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: History Log -->
+            <div class="lg:col-span-7">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-brand-100 h-full">
+                    <h3 class="text-lg font-medium text-gray-900 mb-6 border-b border-gray-100 pb-4">Cycle History Log</h3>
+                    <div id="history-log-container" class="space-y-4">
+                        <!-- History items populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Notification Toast (Hidden by default) -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-lg transform transition-transform translate-y-20 opacity-0 flex items-center gap-2 z-50">
+        <i class="ph-fill ph-check-circle text-brand-400 text-xl"></i>
+        <span id="toast-message">Log saved successfully!</span>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- State Management ---
+        let currentDate = new Date(2026, 10, 2); // Init state referencing provided current context (Nov 2, 2026)
+        let displayMonth = currentDate.getMonth();
+        let displayYear = currentDate.getFullYear();
+        let selectedDateStr = formatDateStr(currentDate);
+        let chartsInstance = {};
+
+        // --- Placeholder Statistical Data ---
+        // Format: 'YYYY-MM-DD': { flow: 'light|medium|heavy|spotting|none', symptoms: ['cramps', ...], notes: '' }
+        const MOCK_DATA = {}; // Empty object to allow you to start fresh with your own real data
+
+        // Initialize from local storage, or fall back to mock data
+        let logData = JSON.parse(localStorage.getItem('aura_logData')) || MOCK_DATA;
+        if (!localStorage.getItem('aura_logData')) {
+            localStorage.setItem('aura_logData', JSON.stringify(logData));
+        }
+
+        // --- Utility Functions ---
+        function formatDateStr(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getMonthName(monthIndex) {
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            return months[monthIndex];
+        }
+
+        // --- UI Interactions ---
+        function switchTab(tab) {
+            const tabs = ['tracker', 'history', 'insights'];
+            const btnClassesActive = "px-4 py-2 rounded-full bg-brand-100 text-brand-700 font-medium transition-colors hover:bg-brand-200".split(' ');
+            const btnClassesInactive = "px-4 py-2 rounded-full text-gray-500 font-medium transition-colors hover:bg-gray-100 hover:text-gray-900".split(' ');
+
+            tabs.forEach(t => {
+                const viewEl = document.getElementById(`view-${t}`);
+                const tabEl = document.getElementById(`tab-${t}`);
+                
+                if (t === tab) {
+                    viewEl.classList.remove('hidden');
+                    if(t === 'history') viewEl.classList.add('grid'); // Re-apply grid layout for history
+                    tabEl.className = btnClassesActive.join(' ');
+                    
+                    if (t === 'insights') updateInsights();
+                    if (t === 'history') renderHistoryLog();
+                } else {
+                    viewEl.classList.add('hidden');
+                    if(t === 'history') viewEl.classList.remove('grid');
+                    tabEl.className = btnClassesInactive.join(' ');
+                }
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // --- Calendar Logic ---
+        function changeMonth(delta) {
+            displayMonth += delta;
+            if (displayMonth > 11) {
+                displayMonth = 0;
+                displayYear++;
+            } else if (displayMonth < 0) {
+                displayMonth = 11;
+                displayYear--;
+            }
+            renderCalendar();
+        }
+
+        function resetToToday() {
+            displayMonth = currentDate.getMonth();
+            displayYear = currentDate.getFullYear();
+            selectDate(currentDate);
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const header = document.getElementById('calendar-month-year');
+            header.textContent = `${getMonthName(displayMonth)} ${displayYear}`;
+
+            const predictions = getPredictions();
+
+            const daysContainer = document.getElementById('calendar-days');
+            daysContainer.innerHTML = '';
+
+            const firstDay = new Date(displayYear, displayMonth, 1).getDay();
+            const daysInMonth = new Date(displayYear, displayMonth + 1, 0).getDate();
+
+            // Padding days before start of month
+            for (let i = 0; i < firstDay; i++) {
+                const emptyDiv = document.createElement('div');
+                daysContainer.appendChild(emptyDiv);
+            }
+
+            const todayStr = formatDateStr(currentDate);
+
+            // Generate days
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateObj = new Date(displayYear, displayMonth, i);
+                const dateStr = formatDateStr(dateObj);
+                
+                const dayBtn = document.createElement('button');
+                dayBtn.className = `h-10 w-full rounded-xl flex items-center justify-center font-medium transition-all duration-200 relative`;
+                dayBtn.textContent = i;
+                
+                // Default styling
+                dayBtn.classList.add('text-gray-700', 'hover:bg-gray-100');
+
+                // Check for data
+                if (logData[dateStr] && logData[dateStr].flow && logData[dateStr].flow !== 'none') {
+                    // Remove default
+                    dayBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
+                    
+                    const flow = logData[dateStr].flow;
+                    if (flow === 'heavy') dayBtn.classList.add('flow-heavy', 'hover:bg-brand-600');
+                    else if (flow === 'medium') dayBtn.classList.add('flow-medium', 'hover:bg-brand-400');
+                    else if (flow === 'light') dayBtn.classList.add('flow-light', 'hover:bg-brand-300');
+                    else if (flow === 'spotting') dayBtn.classList.add('flow-spotting', 'hover:bg-brand-200');
+
+                    // Add small dot for symptoms if any exist
+                    if (logData[dateStr].symptoms && logData[dateStr].symptoms.length > 0) {
+                         const dot = document.createElement('span');
+                         dot.className = "absolute bottom-1 w-1 h-1 rounded-full bg-white opacity-80";
+                         if(flow === 'spotting' || flow === 'light') dot.classList.replace('bg-white', 'bg-brand-800');
+                         dayBtn.appendChild(dot);
+                    }
+                } else if (predictions.periodDates && predictions.periodDates.includes(dateStr)) {
+                    // Highlight predicted period days
+                    dayBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
+                    dayBtn.classList.add('border-2', 'border-dashed', 'border-calm-500', 'bg-calm-50', 'text-calm-700', 'hover:bg-calm-100');
+                } else if (predictions.ovulationDate === dateStr) {
+                    // Highlight predicted ovulation day
+                    dayBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
+                    dayBtn.classList.add('border-2', 'border-teal-500', 'bg-teal-50', 'text-teal-700', 'hover:bg-teal-100', 'font-bold');
+                } else if (predictions.fertileDates && predictions.fertileDates.includes(dateStr)) {
+                    // Highlight predicted fertile window
+                    dayBtn.classList.remove('text-gray-700', 'hover:bg-gray-100');
+                    dayBtn.classList.add('bg-teal-50', 'text-teal-700', 'hover:bg-teal-100');
+                }
+
+                // Selection styling
+                if (dateStr === selectedDateStr) {
+                    dayBtn.classList.add('ring-2', 'ring-offset-2', 'ring-brand-500');
+                    if (!logData[dateStr] || logData[dateStr].flow === 'none') {
+                         dayBtn.classList.add('bg-brand-50', 'text-brand-700');
+                    }
+                }
+
+                // Today styling indicator
+                if (dateStr === todayStr) {
+                    const underline = document.createElement('div');
+                    underline.className = "absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-brand-500";
+                    dayBtn.appendChild(underline);
+                }
+
+                dayBtn.onclick = () => selectDate(dateObj);
+                daysContainer.appendChild(dayBtn);
+            }
+        }
+
+        function selectDate(date) {
+            selectedDateStr = formatDateStr(date);
+            displayMonth = date.getMonth();
+            displayYear = date.getFullYear();
+            
+            // Update UI Date text
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('selected-date-display').textContent = date.toLocaleDateString('en-US', options);
+            document.getElementById('input-date').value = selectedDateStr;
+
+            // Load form data if exists
+            const existingData = logData[selectedDateStr] || { flow: 'none', symptoms: [], notes: '' };
+            
+            // Set Flow
+            document.querySelector(`input[name="flow"][value="${existingData.flow}"]`).checked = true;
+            
+            // Set Symptoms
+            const symptomCheckboxes = document.querySelectorAll('input[name="symptoms"]');
+            symptomCheckboxes.forEach(cb => {
+                cb.checked = existingData.symptoms.includes(cb.value);
+            });
+
+            // Set Notes
+            document.getElementById('notes').value = existingData.notes || '';
+
+            renderCalendar(); // Re-render to update selection ring
+        }
+
+        // --- Form Logic ---
+        function saveDailyLog(e) {
+            e.preventDefault();
+            
+            const dateStr = document.getElementById('input-date').value;
+            const flow = document.querySelector('input[name="flow"]:checked').value;
+            
+            const symptomCheckboxes = document.querySelectorAll('input[name="symptoms"]:checked');
+            const symptoms = Array.from(symptomCheckboxes).map(cb => cb.value);
+            
+            const notes = document.getElementById('notes').value;
+
+            // Save to object and local storage
+            logData[dateStr] = { flow, symptoms, notes };
+            localStorage.setItem('aura_logData', JSON.stringify(logData));
+
+            // Re-render calendar to show changes
+            renderCalendar();
+            
+            // Show feedback
+            showToast('Daily log saved successfully!');
+        }
+
+
+        // --- Insights & Chart.js Logic ---
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.color = '#6b7280'; // gray-500
+
+        function updateInsights() {
+            calculateMetrics();
+            drawCycleChart();
+            drawSymptomsChart();
+            drawFlowChart();
+        }
+
+        function getCycleData() {
+            // Very simplified algorithm to calculate past cycle lengths based on placeholder data
+            // Group contiguous flow days into "periods", calculate days between start dates.
+            
+            let sortedDates = Object.keys(logData)
+                .filter(date => logData[date].flow && logData[date].flow !== 'none')
+                .sort();
+
+            if (sortedDates.length === 0) return { cycles: [], periods: [], periodLengths: [], cycleLengths: [] };
+
+            let periods = [];
+            let currentPeriod = [sortedDates[0]];
+
+            for (let i = 1; i < sortedDates.length; i++) {
+                let prevDate = new Date(sortedDates[i-1]);
+                let currDate = new Date(sortedDates[i]);
+                
+                let diffTime = Math.abs(currDate - prevDate);
+                let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+                if (diffDays <= 4) { // Group together if gap is small (allowing missing 1-2 log days)
+                    currentPeriod.push(sortedDates[i]);
+                } else {
+                    // New period started
+                    periods.push(currentPeriod);
+                    currentPeriod = [sortedDates[i]];
+                }
+            }
+            periods.push(currentPeriod);
+
+            let cycleLengths = [];
+            for (let i = 1; i < periods.length; i++) {
+                let startPrev = new Date(periods[i-1][0]);
+                let startCurr = new Date(periods[i][0]);
+                let diffTime = Math.abs(startCurr - startPrev);
+                let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                cycleLengths.push(diffDays);
+            }
+
+            let periodLengths = periods.map(p => {
+                let start = new Date(p[0]);
+                let end = new Date(p[p.length-1]);
+                return Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+            });
+
+            return { periods, cycleLengths, periodLengths };
+        }
+
+        function getPredictions() {
+            const data = getCycleData();
+            if (data.periods.length === 0) return { periodDates: [], ovulationDate: null, fertileDates: [] };
+            
+            // Calculate averages based on history
+            let avgCycle = 28;
+            if (data.cycleLengths.length > 0) {
+                avgCycle = Math.round(data.cycleLengths.reduce((a,b)=>a+b,0) / data.cycleLengths.length);
+            }
+            
+            let avgPeriod = 5;
+            if (data.periodLengths.length > 0) {
+                avgPeriod = Math.round(data.periodLengths.reduce((a,b)=>a+b,0) / data.periodLengths.length);
+            }
+            
+            // Predict from the start of the last logged period
+            let lastPeriodStart = new Date(data.periods[data.periods.length - 1][0]);
+            let predictedStart = new Date(lastPeriodStart);
+            predictedStart.setDate(predictedStart.getDate() + avgCycle);
+            
+            let periodDates = [];
+            for(let i=0; i<avgPeriod; i++) {
+                let d = new Date(predictedStart);
+                d.setDate(d.getDate() + i);
+                periodDates.push(formatDateStr(d));
+            }
+
+            // Calculate Ovulation (14 days before next predicted period start)
+            let ovulationObj = new Date(predictedStart);
+            ovulationObj.setDate(ovulationObj.getDate() - 14);
+            let ovulationDate = formatDateStr(ovulationObj);
+
+            // Calculate Fertile Window (5 days before to 1 day after ovulation)
+            let fertileDates = [];
+            for(let i = -5; i <= 1; i++) {
+                let d = new Date(ovulationObj);
+                d.setDate(d.getDate() + i);
+                fertileDates.push(formatDateStr(d));
+            }
+
+            return { periodDates, ovulationDate, fertileDates, predictedStart, ovulationObj };
+        }
+
+        function calculateMetrics() {
+            const data = getCycleData();
+            
+            // Avg Cycle
+            let avgCycle = 28; // fallback
+            if (data.cycleLengths.length > 0) {
+                avgCycle = Math.round(data.cycleLengths.reduce((a,b)=>a+b,0) / data.cycleLengths.length);
+            }
+            document.getElementById('avg-cycle-length').innerHTML = `${avgCycle} <span class="text-base font-normal text-gray-500">Days</span>`;
+
+            // Avg Period
+            let avgPeriod = 5;
+            if (data.periodLengths.length > 0) {
+                avgPeriod = Math.round(data.periodLengths.reduce((a,b)=>a+b,0) / data.periodLengths.length);
+            }
+            document.getElementById('avg-period-length').innerHTML = `${avgPeriod} <span class="text-base font-normal text-gray-500">Days</span>`;
+
+            // Next Expected Period
+            if (data.periods.length > 0) {
+                const preds = getPredictions();
+                const options = { month: 'short', day: 'numeric' };
+                
+                // Period Date
+                document.getElementById('next-period-date').textContent = preds.predictedStart.toLocaleDateString('en-US', options);
+                
+                // Ovulation Date
+                document.getElementById('next-ovulation-date').textContent = preds.ovulationObj.toLocaleDateString('en-US', options);
+
+                // Fertile Window Range
+                const fertileStartObj = new Date(preds.fertileDates[0]);
+                const fertileEndObj = new Date(preds.fertileDates[preds.fertileDates.length - 1]);
+                document.getElementById('fertile-window-range').textContent = `Window: ${fertileStartObj.toLocaleDateString('en-US', options)} - ${fertileEndObj.toLocaleDateString('en-US', options)}`;
+            } else {
+                document.getElementById('next-period-date').textContent = 'Needs data';
+                document.getElementById('next-ovulation-date').textContent = 'Needs data';
+                document.getElementById('fertile-window-range').textContent = 'Log past cycles to predict';
+            }
+        }
+
+        function drawCycleChart() {
+            const ctx = document.getElementById('cycleChart').getContext('2d');
+            if (chartsInstance.cycle) chartsInstance.cycle.destroy();
+
+            // Fetch dynamic history data
+            const dataObj = getCycleData();
+            
+            let labels = ['June', 'July', 'August', 'September', 'October'];
+            let chartData = [29, 27, 29, 28, 27]; 
+            
+            // Use real data if available
+            if (dataObj.cycleLengths.length > 0) {
+                chartData = dataObj.cycleLengths;
+                labels = chartData.map((_, i) => `Cycle ${i+1}`);
+            }
+
+            chartsInstance.cycle = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Cycle Length (Days)',
+                        data: data,
+                        backgroundColor: '#fbcfe8', // brand-200
+                        hoverBackgroundColor: '#f472b6', // brand-400
+                        borderRadius: 8,
+                        barThickness: 32
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            min: 20,
+                            max: 35,
+                            grid: { color: '#f3f4f6', drawBorder: false }
+                        },
+                        x: { grid: { display: false, drawBorder: false } }
+                    }
+                }
+            });
+        }
+
+        function drawSymptomsChart() {
+            const ctx = document.getElementById('symptomsChart').getContext('2d');
+            if (chartsInstance.symptoms) chartsInstance.symptoms.destroy();
+
+            // Aggregate symptoms
+            let sympCounts = {};
+            Object.values(logData).forEach(entry => {
+                if(entry.symptoms) {
+                    entry.symptoms.forEach(s => {
+                        sympCounts[s] = (sympCounts[s] || 0) + 1;
+                    });
+                }
+            });
+
+            // Map keys to pretty names
+            const nameMap = { cramps: 'Cramps', bloating: 'Bloating', headache: 'Headache', fatigue: 'Fatigue', mood: 'Mood Swings', acne: 'Acne' };
+            const labels = Object.keys(sympCounts).map(k => nameMap[k] || k);
+            const data = Object.values(sympCounts);
+
+            chartsInstance.symptoms = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            '#a855f7', // purple
+                            '#f472b6', // pink
+                            '#fbcfe8', // light pink
+                            '#c084fc', // light purple
+                            '#e9d5ff', // pale purple
+                            '#fce7f3'  // pale pink
+                        ],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } }
+                    }
+                }
+            });
+        }
+
+        function drawFlowChart() {
+            const ctx = document.getElementById('flowChart').getContext('2d');
+            if (chartsInstance.flow) chartsInstance.flow.destroy();
+
+            // Aggregate flow days per month (placeholder calculation)
+            // Just displaying static aesthetics representing the data spread
+            
+            chartsInstance.flow = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5'],
+                    datasets: [
+                        {
+                            label: 'Average Flow Intensity',
+                            data: [1, 3, 4, 3, 1], // 1=Spot, 2=Light, 3=Med, 4=Heavy
+                            borderColor: '#ec4899', // brand-500
+                            backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#ec4899',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let map = {1: 'Spotting', 2: 'Light', 3: 'Medium', 4: 'Heavy'};
+                                    return 'Intensity: ' + map[context.raw];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 5,
+                            ticks: {
+                                callback: function(value) {
+                                    let map = {1: 'Spotting', 2: 'Light', 3: 'Medium', 4: 'Heavy'};
+                                    return map[value] || '';
+                                },
+                                stepSize: 1
+                            },
+                            grid: { color: '#f3f4f6', drawBorder: false }
+                        },
+                        x: { grid: { display: false, drawBorder: false } }
+                    }
+                }
+            });
+        }
+
+        // --- History Logic ---
+        function goToCalendarMonth(dateString) {
+            // Parse the date and jump to that specific month/year in the tracker
+            const date = new Date(dateString);
+            
+            // Switch tabs
+            switchTab('tracker');
+            
+            // Select the start date of the period (this automatically handles changing the month display and re-rendering)
+            selectDate(date);
+        }
+
+        function savePastCycle(e) {
+            e.preventDefault();
+            
+            const startDateStr = document.getElementById('past-start').value;
+            const endDateStr = document.getElementById('past-end').value;
+            
+            if(!startDateStr || !endDateStr) return;
+            
+            const start = new Date(startDateStr);
+            const end = new Date(endDateStr);
+            
+            if(end < start) {
+                alert("End date cannot be before start date.");
+                return;
+            }
+
+            const symptomCheckboxes = document.querySelectorAll('input[name="past-symptoms"]:checked');
+            const symptoms = Array.from(symptomCheckboxes).map(cb => cb.value);
+            
+            // Loop through the dates and add them to logData
+            let current = new Date(start);
+            while (current <= end) {
+                let dStr = formatDateStr(current);
+                
+                // If entry doesn't exist or is empty, set it
+                if (!logData[dStr] || !logData[dStr].flow || logData[dStr].flow === 'none') {
+                    // Start and end are lighter, middle is heavy as a default historical assumption
+                    let flowIntensity = 'medium';
+                    if (current.getTime() === start.getTime() || current.getTime() === end.getTime()) {
+                        flowIntensity = 'light';
+                    }
+                    
+                    logData[dStr] = { 
+                        flow: flowIntensity, 
+                        symptoms: symptoms, 
+                        notes: 'Logged via History' 
+                    };
+                } else {
+                    // Merge symptoms if data already exists
+                    let existingSymp = new Set(logData[dStr].symptoms || []);
+                    symptoms.forEach(s => existingSymp.add(s));
+                    logData[dStr].symptoms = Array.from(existingSymp);
+                }
+                
+                current.setDate(current.getDate() + 1);
+            }
+
+            localStorage.setItem('aura_logData', JSON.stringify(logData));
+            
+            document.getElementById('past-cycle-form').reset();
+            renderHistoryLog();
+            renderCalendar();
+            showToast('Historical cycle added successfully!');
+        }
+
+        function renderHistoryLog() {
+            const container = document.getElementById('history-log-container');
+            container.innerHTML = '';
+            
+            const data = getCycleData();
+            if(data.periods.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-sm italic">No history logged yet.</p>';
+                return;
+            }
+
+            // Loop backwards to show most recent first
+            for (let i = data.periods.length - 1; i >= 0; i--) {
+                const period = data.periods[i];
+                const startStr = period[0];
+                const endStr = period[period.length - 1];
+                
+                const startObj = new Date(startStr);
+                const endObj = new Date(endStr);
+                
+                const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+                const formattedStart = startObj.toLocaleDateString('en-US', dateOptions);
+                const formattedEnd = endObj.toLocaleDateString('en-US', dateOptions);
+                
+                const duration = data.periodLengths[i];
+                
+                let cycleLengthHTML = '';
+                if(i > 0) {
+                    const cycleGap = data.cycleLengths[i-1];
+                    cycleLengthHTML = `<span class="bg-brand-50 text-brand-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-brand-200">${cycleGap} Day Cycle</span>`;
+                } else {
+                    cycleLengthHTML = `<span class="bg-gray-50 text-gray-500 text-xs font-semibold px-2.5 py-1 rounded-full border border-gray-200">Current/First Cycle</span>`;
+                }
+
+                // Gather unique symptoms for this period
+                let allSymptoms = new Set();
+                period.forEach(date => {
+                    if(logData[date] && logData[date].symptoms) {
+                        logData[date].symptoms.forEach(s => allSymptoms.add(s));
+                    }
+                });
+                
+                const symptomBadges = Array.from(allSymptoms).map(s => 
+                    `<span class="text-[10px] uppercase tracking-wider font-semibold text-calm-700 bg-calm-100 px-2 py-0.5 rounded">${s}</span>`
+                ).join(' ');
+
+                const logItem = document.createElement('div');
+                logItem.className = "cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-brand-400 hover:ring-1 hover:ring-brand-400 transition-all duration-200 gap-4 group";
+                logItem.onclick = () => goToCalendarMonth(startStr);
+                
+                logItem.innerHTML = `
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center text-brand-500 shrink-0 mt-1 group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors">
+                            <i class="ph-fill ph-drop text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-gray-900">${formattedStart} <span class="text-gray-400 font-normal mx-1">to</span> ${formattedEnd}</p>
+                            <p class="text-sm text-gray-500 mt-0.5">Lasted ${duration} days</p>
+                            ${symptomBadges ? `<div class="flex flex-wrap gap-1 mt-2">${symptomBadges}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="shrink-0 sm:text-right">
+                        ${cycleLengthHTML}
+                    </div>
+                `;
+                
+                container.appendChild(logItem);
+            }
+        }
+
+        // --- Initialization ---
+        window.onload = () => {
+            selectDate(currentDate);
+            // Default view is tracker, calendar is rendered by selectDate
+        };
+
+    </script>
+</body>
+</html>

@@ -173,26 +173,17 @@
         </button>
     </nav>
 
-    <script>
-        // 1. Data Initialization
-        let cycles = JSON.parse(localStorage.getItem('flow_cycles'));
-        if (!cycles || cycles.length === 0) {
-            cycles = [
-                { id: 1, startDate: '2026-01-12', duration: 4, symptoms: '' },
-                { id: 2, startDate: '2026-02-11', duration: 4, symptoms: '' },
-                { id: 3, startDate: '2026-03-13', duration: 5, symptoms: '' },
-                { id: 4, startDate: '2026-04-09', duration: 4, symptoms: '' },
-                { id: 5, startDate: '2026-05-11', duration: 4, symptoms: '' },
-                { id: 6, startDate: '2026-06-06', duration: 4, symptoms: '' },
-                { id: 7, startDate: '2026-07-04', duration: 3, symptoms: '' },
-                { id: 8, startDate: '2026-07-31', duration: 4, symptoms: '' },
-                { id: 9, startDate: '2026-08-27', duration: 3, symptoms: '' },
-                { id: 10, startDate: '2026-09-20', duration: 3, symptoms: '' },
-                { id: 11, startDate: '2026-10-17', duration: 3, symptoms: '' }
-            ];
-            localStorage.setItem('flow_cycles', JSON.stringify(cycles));
-        }
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // 1. Cloud & Data Initialization
+        let cycles = [];
+        let db = null;
+        let userId = null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'flow-tracker';
+        
         let currentDate = new Date();
         let currentMonth = currentDate.getMonth();
         let currentYear = currentDate.getFullYear();
@@ -200,7 +191,100 @@
         let selectedDateForLog = null;
         let quickSymptoms = [];
 
-        // 2. Local Time Fix Helpers (Forces Midnight precision)
+        // Cloud save helper function
+        async function saveToCloud() {
+            if (!userId || !db) {
+                // Fallback to local device storage if not connected to the cloud workspace
+                localStorage.setItem('flow_cycles', JSON.stringify(cycles));
+                return;
+            }
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'user_data', 'cycles');
+                await setDoc(docRef, { cyclesData: JSON.stringify(cycles) });
+            } catch (e) {
+                console.error("Cloud save error:", e);
+            }
+        }
+
+        // Initialize Secure Cloud Connection
+        async function initCloud() {
+            if (typeof __firebase_config === 'undefined') {
+                // Local fallback (when opening raw HTML on desktop instead of live link)
+                let local = JSON.parse(localStorage.getItem('flow_cycles'));
+                if (!local || local.length === 0) {
+                    local = [
+                        { id: 1, startDate: '2026-01-12', duration: 4, symptoms: '' },
+                        { id: 2, startDate: '2026-02-11', duration: 4, symptoms: '' },
+                        { id: 3, startDate: '2026-03-13', duration: 5, symptoms: '' },
+                        { id: 4, startDate: '2026-04-09', duration: 4, symptoms: '' },
+                        { id: 5, startDate: '2026-05-11', duration: 4, symptoms: '' },
+                        { id: 6, startDate: '2026-06-06', duration: 4, symptoms: '' },
+                        { id: 7, startDate: '2026-07-04', duration: 3, symptoms: '' },
+                        { id: 8, startDate: '2026-07-31', duration: 4, symptoms: '' },
+                        { id: 9, startDate: '2026-08-27', duration: 3, symptoms: '' },
+                        { id: 10, startDate: '2026-09-20', duration: 3, symptoms: '' },
+                        { id: 11, startDate: '2026-10-17', duration: 3, symptoms: '' }
+                    ];
+                    localStorage.setItem('flow_cycles', JSON.stringify(local));
+                }
+                cycles = local;
+                updateUI();
+                return;
+            }
+
+            try {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                const auth = getAuth(app);
+
+                // Securely authenticate this device
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                userId = auth.currentUser?.uid;
+                if (!userId) return;
+
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'user_data', 'cycles');
+                
+                // Real-time Cloud Listener (Instantly syncs cross-device changes)
+                onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.cyclesData) {
+                            cycles = JSON.parse(data.cyclesData);
+                            updateUI();
+                        }
+                    } else {
+                        // Push 2026 baseline data on first cloud setup
+                        cycles = [
+                            { id: 1, startDate: '2026-01-12', duration: 4, symptoms: '' },
+                            { id: 2, startDate: '2026-02-11', duration: 4, symptoms: '' },
+                            { id: 3, startDate: '2026-03-13', duration: 5, symptoms: '' },
+                            { id: 4, startDate: '2026-04-09', duration: 4, symptoms: '' },
+                            { id: 5, startDate: '2026-05-11', duration: 4, symptoms: '' },
+                            { id: 6, startDate: '2026-06-06', duration: 4, symptoms: '' },
+                            { id: 7, startDate: '2026-07-04', duration: 3, symptoms: '' },
+                            { id: 8, startDate: '2026-07-31', duration: 4, symptoms: '' },
+                            { id: 9, startDate: '2026-08-27', duration: 3, symptoms: '' },
+                            { id: 10, startDate: '2026-09-20', duration: 3, symptoms: '' },
+                            { id: 11, startDate: '2026-10-17', duration: 3, symptoms: '' }
+                        ];
+                        saveToCloud(); // This securely backs up the defaults
+                    }
+                }, (error) => {
+                    console.error("Cloud listener error:", error);
+                });
+            } catch (e) {
+                console.error("Cloud init failed:", e);
+            }
+        }
+        initCloud();
+
+        // 2. Local Time Fix Helpers
         const getLocalDate = (dateStr) => {
             const [y, m, d] = dateStr.split('-');
             return new Date(y, m - 1, d, 0, 0, 0, 0);
@@ -208,7 +292,7 @@
         const addDays = (date, days) => { 
             let d = new Date(date); 
             d.setDate(d.getDate() + days); 
-            d.setHours(0,0,0,0); // Force midnight
+            d.setHours(0,0,0,0);
             return d; 
         }
         const diffDays = (d1, d2) => Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
@@ -247,17 +331,15 @@
         });
         document.querySelector('[data-target="tab-calendar"]').classList.add('text-pink-500');
 
-        // 4. Strict Predictive Engine (Anchored exactly to last cycle)
+        // 4. Strict Predictive Engine
         function getPredictions() {
             if (cycles.length === 0) return null;
             let sorted = [...cycles].sort((a, b) => getLocalDate(a.startDate) - getLocalDate(b.startDate));
             
-            // Avg Period
             let totalPeriod = 0;
             sorted.forEach(c => totalPeriod += c.duration);
             let avgPeriod = Math.round(totalPeriod / sorted.length);
 
-            // Avg Gap (Recent 6)
             let recent = sorted.slice(-7); 
             let totalGaps = 0, gapCount = 0;
             for (let i = 0; i < recent.length - 1; i++) {
@@ -266,33 +348,22 @@
             }
             let avgCycle = gapCount > 0 ? Math.round(totalGaps / gapCount) : 28;
 
-            // Strict anchors using only the last logged period
             let lastCycle = sorted[sorted.length - 1];
             let lastStart = getLocalDate(lastCycle.startDate);
-            
-            // Follicular Phase is calculated as (Cycle Length - Luteal Phase of 14 Days)
             let follicularPhaseLength = avgCycle - 14; 
             
-            // Ovulation is calculated directly FORWARD from the last logged period ONLY
             let currentOvulation = addDays(lastStart, follicularPhaseLength);
             let currentFertileStart = addDays(currentOvulation, -5);
             let currentFertileEnd = addDays(currentOvulation, 1);
             
-            // Next period is projected forward from the last period
             let nextPeriodStart = addDays(lastStart, avgCycle);
             let nextPeriodEnd = addDays(nextPeriodStart, avgPeriod - 1);
             
             return { 
-                avgCycle, 
-                avgPeriod, 
-                lastStart,
-                currentOvulation, 
-                currentFertileStart, 
-                currentFertileEnd, 
-                nextPeriodStart, 
-                nextPeriodEnd,
-                sorted, 
-                recent 
+                avgCycle, avgPeriod, lastStart,
+                currentOvulation, currentFertileStart, currentFertileEnd, 
+                nextPeriodStart, nextPeriodEnd,
+                sorted, recent 
             };
         }
 
@@ -353,14 +424,12 @@
                     classes += " text-teal-700 dark:text-teal-300";
                 }
 
-                // Highlight today dynamically
                 let today = new Date();
                 if(day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear()) {
                     classes += " ring-2 ring-pink-500 ring-offset-2 dark:ring-offset-gray-800 font-extrabold";
                     hoverTooltip = "Today";
                 }
 
-                // Add Local time properly back to the string for quick log
                 let localISO = new Date(cellDate.getTime() - (cellDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
                 grid.innerHTML += `<div class="${classes}" title="${hoverTooltip}" onclick="openQuickLog('${localISO}')">
@@ -374,7 +443,7 @@
         document.getElementById('nextMonth').onclick = () => { currentMonth++; if(currentMonth > 11) { currentMonth = 0; currentYear++; } renderCalendar(); };
 
         // 6. Quick Log Widget Engine
-        function openQuickLog(dateStr) {
+        window.openQuickLog = function(dateStr) {
             selectedDateForLog = getLocalDate(dateStr);
             document.getElementById('quickLogDateLabel').innerText = formatDate(selectedDateForLog);
             document.getElementById('quickLogWidget').classList.remove('hidden');
@@ -404,14 +473,16 @@
                 symptoms: quickSymptoms.join(', ')
             });
             compactCycles();
-            localStorage.setItem('flow_cycles', JSON.stringify(cycles));
             
-            document.getElementById('quickSaveBtn').innerText = "Saved!";
+            // Instantly Backup to Cloud
+            saveToCloud();
+            
+            document.getElementById('quickSaveBtn').innerText = "Saved to Cloud!";
             setTimeout(() => {
                 document.getElementById('quickSaveBtn').innerText = "Log Period Day";
                 document.getElementById('quickLogWidget').classList.add('hidden');
                 updateUI();
-            }, 800);
+            }, 1000);
         };
 
         // Smart Merging algorithm
@@ -448,11 +519,11 @@
                 symptoms: ''
             });
             compactCycles();
-            localStorage.setItem('flow_cycles', JSON.stringify(cycles));
+            
+            saveToCloud(); // Save manual form inputs to cloud
+            
             document.getElementById('cycleForm').reset();
             updateUI();
-            
-            // Auto switch back to calendar for preview
             document.querySelector('[data-target="tab-calendar"]').click();
         };
 
@@ -471,7 +542,9 @@
         document.getElementById('confirmDeleteBtn').onclick = () => {
             if (cycleToDelete) {
                 cycles = cycles.filter(c => String(c.id) !== String(cycleToDelete)); 
-                localStorage.setItem('flow_cycles', JSON.stringify(cycles)); 
+                
+                saveToCloud(); // Delete from cloud
+                
                 updateUI();
                 cycleToDelete = null;
             }
@@ -521,7 +594,6 @@
             document.getElementById('insightOvulation').innerText = formatDate(preds.currentOvulation);
             document.getElementById('insightFertile').innerText = `${formatDate(preds.currentFertileStart)} - ${formatDate(preds.currentFertileEnd)}`;
 
-            // Healthy Range Calculation (Medical variance of +/- 3 days from individual average)
             let hMin = preds.avgCycle - 3;
             let hMax = preds.avgCycle + 3;
             document.getElementById('healthyRangeBadge').innerText = `Healthy: ${hMin}-${hMax} days`;
@@ -535,18 +607,16 @@
                 let gap = diffDays(getLocalDate(preds.recent[i].startDate), getLocalDate(preds.recent[i+1].startDate));
                 data.push(gap);
 
-                // Check for irregular gaps
                 if (gap < hMin || gap > hMax) {
-                    pointColors.push('#ef4444'); // Red highlight
-                    pointSizes.push(6); // Make irregular dots bigger
+                    pointColors.push('#ef4444');
+                    pointSizes.push(6);
                     hasIrregular = true;
                 } else {
-                    pointColors.push('#ec4899'); // Normal Pink
+                    pointColors.push('#ec4899');
                     pointSizes.push(4);
                 }
             }
 
-            // Show or hide the irregularity warning based on data
             if (hasIrregular) {
                 document.getElementById('irregularWarning').classList.remove('hidden');
             } else {
@@ -581,7 +651,6 @@
                                 callbacks: {
                                     label: function(context) {
                                         let val = context.raw;
-                                        // Custom label in tooltip if out of bounds
                                         return (val < hMin || val > hMax) ? `${val} days (Irregular)` : `${val} days`;
                                     }
                                 }
@@ -597,7 +666,6 @@
         }
 
         function updateUI() { renderCalendar(); renderHistory(); renderInsights(); }
-        updateUI();
     </script>
 </body>
 </html>
